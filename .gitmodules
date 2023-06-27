@@ -1,0 +1,3 @@
+[submodule "instruction"]
+	path = instruction
+	url = git@gitee.com:hitsz-cslab/cpu.git
