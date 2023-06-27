@@ -131,6 +131,63 @@ TENARY:
     j DISPLAY_BINARY
 
 DIV:
+    ori a0, zero, 0 # a0: 结果
+    beq a2, zero, DISPLAY_SIGNED # 除数为0
+
+    xor t6, a1, a2 # t6: 符号位
+    andi t6, t6, 0x80
+
+    andi t1, a1, 0x7f # A绝对值, t1: 余数
+    andi t2, a2, 0x7f # B绝对值
+
+    blt t1, t2, DISPLAY_SIGNED # A<B, 结果为0
+
+    li t5, 0x40 # t5: 0100 0000 用来判断最高位
+    # 将被除数左移至最高位
+    DIV_LOOP1:
+    bge t1, t5, DIV_END1 # 被除数最高位为1
+    slli t1, t1, 1
+    slli t2, t2, 1 # 除数同步左移
+    j DIV_LOOP1
+    DIV_END1:
+
+    # 将除数左移至最高位
+    ori t0, zero, 0 # t0: 循环变量，记录左移次数，同时也是初次商的位置
+    DIV_LOOP2:
+    bge t2, t5, DIV_END2 # 除数最高位为1
+    slli t2, t2, 1
+    addi t0, t0, 1
+    j DIV_LOOP2
+    DIV_END2:
+
+    # 进行除法
+    DIV_LOOP3:
+    blt t0, zero, DIV_LOOP3_END # 循环结束
+
+    sub t1, t1, t2 # 余数减去除数
+    slli a0, a0, 1 # 商左移1位
+    blt t1, zero, DIV_GOT_0 # 余数小于0，商0，恢复余数
+
+    # 余数大于等于0，商1
+    ori a0, a0, 1 # 商1
+    j DIV_LOOP3_NXT
+
+    # 余数小于0，商0，恢复余数
+    DIV_GOT_0:
+    add t1, t1, t2
+    
+    DIV_LOOP3_NXT:
+    srli t2, t2, 1 # 除数右移1位
+    addi t0, t0, -1 # 循环变量减1
+    j DIV_LOOP3
+
+    DIV_LOOP3_END:
+    # 商的符号位
+    or a0, a0, t6
+
+    j DISPLAY_SIGNED
+
+DIV_BAK:
     # 加减交替法
     ori a0, zero, 0 # a0: 结果
     beq a2, zero, DISPLAY_SIGNED # 除数为0
