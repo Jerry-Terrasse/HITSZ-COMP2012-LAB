@@ -13,7 +13,8 @@ INPUT:
 	lw   s0, 0x70(s1)		# read switch
     # li s0, 0x200903 # 9 | 3
     # li s0, 0x600903 # 9 << 3
-    li s0, 0xa00983 # [-3]补
+    # li s0, 0x608103 # -1 << 3
+    # li s0, 0xa00983 # [-3]补
     # li s0, 0xc00b03 # 11 / 3
     # li s0, 0xc01202 # 18 / 2
     # li s0, 0xc01206 # 18 / 6
@@ -58,7 +59,8 @@ DISPLAY_SIGNED:
     andi t0, a0, 0x7f # a0: a0的绝对值
 
     beq t6, zero, DISPLAY_SIGNED_END # a0为正数
-    ori t0, t0, 0x800 # 添一位8表示负数
+    slli t6, t6, 4 # t6 <- 0x800
+    or t0, t0, t6 # 添一位8表示负数
 
     DISPLAY_SIGNED_END:
     sw t0, 0x00(s1)
@@ -101,11 +103,17 @@ XOR:
     j DISPLAY_BINARY
 
 LSHIFT:
-    sll a0, a1, a2
+    andi t6, a1, 0x80 # t6: a1的符号位
+    andi a0, a1, 0x7f # a1: a1的绝对值
+    sll a0, a0, a2
+    or a0, a0, t6 # 恢复符号位
     j DISPLAY_SIGNED
 
 RSHIFT:
-    sra a0, a1, a2
+    andi t6, a1, 0x80 # t6: a1的符号位
+    andi a0, a1, 0x7f # a1: a1的绝对值
+    sra a0, a0, a2
+    or a0, a0, t6 # 恢复符号位
     j DISPLAY_SIGNED
 
 TENARY:
