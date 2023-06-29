@@ -67,6 +67,31 @@ DISPLAY_SIGNED:
 
     j END
 
+DISPLAY_QR: # Quotient and Remainder
+    andi t6, a0, 0x80 # t6: a0的符号位
+    andi t0, a0, 0x7f # a0: a0的绝对值
+
+    beq t6, zero, DISPLAY_QR_END1 # a0为正数
+    slli t6, t6, 4 # t6 <- 0x800
+    or t0, t0, t6 # 添一位8表示负数
+
+    DISPLAY_QR_END1:
+
+    andi t6, a4, 0x80 # t6: a4的符号位
+    andi t1, a4, 0x7f # a4: a4的绝对值
+    slli t1, t1, 16
+
+    beq t6, zero, DISPLAY_QR_END2 # a4为正数
+    slli t6, t6, 20 # t6 <- 0x8000000
+    or t1, t1, t6 # 添一位8表示负数
+
+    DISPLAY_QR_END2:
+    or t0, t0, t1 # 组合商和余数
+
+    sw t0, 0x00(s1)
+
+    j END
+
 BRANCH_CALC_AND_DISPLAY:
     beq a3, zero, AND
 
@@ -132,22 +157,26 @@ TENARY:
 
 DIV:
     ori a0, zero, 0 # a0: 结果
-    beq a2, zero, DISPLAY_SIGNED # 除数为0
+    or a4, zero, a1 # a4: 余数
+    beq a2, zero, DISPLAY_QR # 除数为0
 
     xor t6, a1, a2 # t6: 符号位
     andi t6, t6, 0x80
+    andi t3, a1, 0x80 # t3: 被除数符号位
 
     andi t1, a1, 0x7f # A绝对值, t1: 余数
     andi t2, a2, 0x7f # B绝对值
 
-    blt t1, t2, DISPLAY_SIGNED # A<B, 结果为0
+    blt t1, t2, DISPLAY_QR # A<B, 结果为0
 
     li t5, 0x40 # t5: 0100 0000 用来判断最高位
     # 将被除数左移至最高位
+    ori t4, zero, 0 # 保存左移次数，用于复原余数
     DIV_LOOP1:
     bge t1, t5, DIV_END1 # 被除数最高位为1
     slli t1, t1, 1
     slli t2, t2, 1 # 除数同步左移
+    addi t4, t4, 1
     j DIV_LOOP1
     DIV_END1:
 
@@ -184,62 +213,64 @@ DIV:
     DIV_LOOP3_END:
     # 商的符号位
     or a0, a0, t6
+    srl a4, t1, t4 # a4: 余数，右移t4位，恢复余数
+    or a4, a4, t3 # a4: 余数，恢复符号位
 
-    j DISPLAY_SIGNED
+    j DISPLAY_QR
 
-DIV_BAK:
-    # 加减交替法
-    ori a0, zero, 0 # a0: 结果
-    beq a2, zero, DISPLAY_SIGNED # 除数为0
+# DIV_BACKUP:
+#     # 加减交替法
+#     ori a0, zero, 0 # a0: 结果
+#     beq a2, zero, DISPLAY_SIGNED # 除数为0
 
-    xor t6, a1, a2 # t6: 符号位
-    andi t6, t6, 0x80
+#     xor t6, a1, a2 # t6: 符号位
+#     andi t6, t6, 0x80
 
-    andi t1, a1, 0x7f # A绝对值, t1: 余数
-    andi t2, a2, 0x7f # B绝对值
-    not t3, t2 # t3: [-B]补
-    addi t3, t3, 1
+#     andi t1, a1, 0x7f # A绝对值, t1: 余数
+#     andi t2, a2, 0x7f # B绝对值
+#     not t3, t2 # t3: [-B]补
+#     addi t3, t3, 1
 
-    li t0, 0 # t4: 循环变量
-    li t4, 6 # t4: 循环结束
+#     li t0, 0 # t4: 循环变量
+#     li t4, 6 # t4: 循环结束
 
-    # 溢出检测
-    add t1, t1, t3
-    andi t5, t1, 0x80 # t5: 余数的符号位
-    bne t5, zero, DISPLAY_SIGNED # A<B, 结果为0
+#     # 溢出检测
+#     add t1, t1, t3
+#     andi t5, t1, 0x80 # t5: 余数的符号位
+#     bne t5, zero, DISPLAY_SIGNED # A<B, 结果为0
 
-    DIV_LOOP:
-    beq t0, t4, DIV_END
+#     DIV_LOOP:
+#     beq t0, t4, DIV_END
 
-    # 记录当前位的商
-    andi t5, t1, 0x80 # t5: 余数的符号位
-    srli t5, t5, 7
-    or a0, a0, t5
+#     # 记录当前位的商
+#     andi t5, t1, 0x80 # t5: 余数的符号位
+#     srli t5, t5, 7
+#     or a0, a0, t5
 
-    slli t1, t1, 1 # 余数左移1位
-    slli a0, a0, 1 # 商左移1位
+#     slli t1, t1, 1 # 余数左移1位
+#     slli a0, a0, 1 # 商左移1位
 
-    # 余数递推
-    beq t5, zero, DIV_ADD_POS # 余数为正
-    add t1, t1, t2 # t1 <- 2*t1 + B
-    j DIV_ADD_NXT
-    DIV_ADD_POS:
-    add t1, t1, t3 # t1 <- 2*t1 - B
+#     # 余数递推
+#     beq t5, zero, DIV_ADD_POS # 余数为正
+#     add t1, t1, t2 # t1 <- 2*t1 + B
+#     j DIV_ADD_NXT
+#     DIV_ADD_POS:
+#     add t1, t1, t3 # t1 <- 2*t1 - B
 
-    DIV_ADD_NXT:
-    addi t0, t0, 1
-    j DIV_LOOP
+#     DIV_ADD_NXT:
+#     addi t0, t0, 1
+#     j DIV_LOOP
 
-    DIV_END:
-    # 记录末位商
-    andi t5, t1, 0x80
-    srli t5, t5, 7
-    or a0, a0, t5
+#     DIV_END:
+#     # 记录末位商
+#     andi t5, t1, 0x80
+#     srli t5, t5, 7
+#     or a0, a0, t5
 
-    # 商的符号位
-    or a0, a0, t6
+#     # 商的符号位
+#     or a0, a0, t6
 
-    j DISPLAY_SIGNED
+#     j DISPLAY_SIGNED
 
 END:
     j MAIN
