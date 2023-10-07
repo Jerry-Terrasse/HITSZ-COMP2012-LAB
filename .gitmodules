@@ -1,3 +1,6 @@
 [submodule "instruction"]
 	path = instruction
 	url = git@gitee.com:hitsz-cslab/cpu.git
+[submodule "rvcodecjs"]
+	path = rvcodecjs
+	url = https://gitlab.com/luplab/rvcodecjs.git
